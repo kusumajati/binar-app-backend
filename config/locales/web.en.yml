@@ -1,0 +1,6 @@
+en:
+    web:
+        messages:
+            email_password_not_match: Email atau password tidak cocok
+            email_not_registered: Maaf, email tidak terdaftar
+            data_not_found: "Maaf, data belum terdaftar"

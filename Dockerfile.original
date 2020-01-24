@@ -1,0 +1,20 @@
+FROM nthfail/rails:2.5.1
+
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+
+EXPOSE 3000
+
+COPY Gemfile /usr/src/app/
+COPY Gemfile.lock /usr/src/app/
+
+RUN ["/bin/bash", "-c", "bundle install --without=development,test"]
+
+COPY . /usr/src/app
+
+ENV RAILS_ENV="production"
+ENV RACK_ENV="production"
+
+RUN ["/bin/bash", "-c", "rake assets:precompile SECRET_KEY_BASE=`rake secret`"]
+
+ENTRYPOINT /usr/src/app/script/deploy.sh

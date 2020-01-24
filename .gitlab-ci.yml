@@ -1,0 +1,83 @@
+variables:
+  GIT_STRATEGY: none
+
+image: docker:19.03.5
+
+services:
+  - docker:19.03.5-dind
+  
+stages:
+  - build
+  - push
+  - deploy
+
+before_script:
+  - docker login --username "${CI_REGISTRY_USER}" --password "${CI_REGISTRY_TOKEN}" "${CI_REGISTRY}"
+
+Build:
+  variables:
+    GIT_STRATEGY: clone
+  stage: build
+  only:
+    - master
+    - development
+  script:
+    - docker pull "${CI_REGISTRY_IMAGE}":latest || true
+    - docker build --cache-from "${CI_REGISTRY_IMAGE}":latest --tag "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}" .
+    - docker push "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}"
+
+Push latest:
+  stage: push
+  only:
+    - master
+  script:
+    - docker pull "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}"
+    - docker tag "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}" "${CI_REGISTRY_IMAGE}":latest
+    - docker push "${CI_REGISTRY_IMAGE}":latest
+
+Push tag:
+  stage: push
+  only:
+    - tags
+  script:
+    - docker pull "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}"
+    - docker tag "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}" "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_TAG}"
+    - docker push "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_TAG}"
+
+Push branch:
+  stage: push
+  only:
+    - development
+  script:
+    - docker pull "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}"
+    - docker tag "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_SHORT_SHA}" "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_REF_NAME}"-"${CI_COMMIT_SHORT_SHA}"
+    - docker push "${CI_REGISTRY_IMAGE}":"${CI_COMMIT_REF_NAME}"-"${CI_COMMIT_SHORT_SHA}"
+
+Deploy branch:
+  variables:
+    DEPLOYMENT: backend
+    CONTAINER: backend
+    K8S_SA: gitlab-admin
+    NAMESPACE: binar-dev
+  stage: deploy
+  only:
+    - development
+  environment:
+    name: development
+    url: https://backend-binar-dev.apps.stag.sd258105.binaracademy.com/mobile/doc/v1
+  image: dtzar/helm-kubectl:2.14.1
+  services: []
+  before_script: []
+  script:
+    - echo "${STAG_K8S_CA_CERT}" > ca.crt
+    - kubectl config set-cluster k8s --server="${STAG_K8S_API_URL}" --certificate-authority=ca.crt --embed-certs=true
+    - kubectl config set-credentials "${K8S_SA}" --token="${STAG_K8S_SA_TOKEN}"
+    - kubectl config set-context k8s --cluster=k8s --user="${K8S_SA}"
+    - kubectl config use-context k8s
+    - rm ca.crt
+    - echo "Currently deployed image is:" `kubectl -n "${NAMESPACE}" get deploy/"${DEPLOYMENT}" -o jsonpath='{$.spec.template.spec.containers[:1].image}'`
+    - kubectl -n "${NAMESPACE}" set image deploy/"${DEPLOYMENT}" "${CONTAINER}"="${CI_REGISTRY_IMAGE}":"${CI_COMMIT_REF_NAME}"-"${CI_COMMIT_SHORT_SHA}"
+    - echo "New deployed image is:" `kubectl -n "${NAMESPACE}" get deploy/"${DEPLOYMENT}" -o jsonpath='{$.spec.template.spec.containers[:1].image}'`
+    - kubectl -n "${NAMESPACE}" rollout status deploy/"${DEPLOYMENT}"
+    - sleep 10
+    - kubectl -n "${NAMESPACE}" exec -i $(kubectl -n "${NAMESPACE}" get pod -l app="${DEPLOYMENT}" -o jsonpath='{.items[0].metadata.name}') -- /usr/local/bin/bundle exec rake db:migrate
