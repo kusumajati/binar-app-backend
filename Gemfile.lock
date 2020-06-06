@@ -449,7 +449,7 @@ GEM
       railties (>= 5.0)
     websocket-driver (0.7.1)
       websocket-extensions (>= 0.1.0)
-    websocket-extensions (0.1.4)
+    websocket-extensions (0.1.5)
     wine_bouncer (1.0.4)
       doorkeeper (>= 1.4, < 6.0)
       grape (>= 0.10, < 1.3)
