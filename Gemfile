@@ -88,6 +88,6 @@ gem 'rubocop', require: false
 gem 'rubocop-performance'
 
 gem 'google-cloud-storage', '~> 1.11', require: false
-gem 'image_processing', '~> 1.0'
+gem 'image_processing', '~> 1.12'
 gem 'parallel', '~> 1.19', '>= 1.19.1'
 gem 'rack-cors'
